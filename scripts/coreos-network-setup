@@ -1,0 +1,78 @@
+## SRV RECORDS FOR DISCOVERY ##
+
+_etcd-server._tcp
+0 0 2380  etcd1.dev.example.com.
+0 0 2380  etcd2.dev.example.com.
+0 0 2380  etcd3.dev.example.com.
+
+
+_etcd-client._tcp
+0 0 2379  etcd1.dev.example.com.
+0 0 2379  etcd2.dev.example.com.
+0 0 2379  etcd3.dev.example.com.
+
+
+#############
+## MAIN cluster join ##
+HOST_IDENTIFIER="etcd3.dev.example.com"
+DISCOVERY_SRV="dev.example.com"
+[[ ! -d /etc/systemd/system/etcd2.service.d ]] && mkdir -p /etc/systemd/system/etcd2.service.d
+cat << EOF >> /etc/systemd/system/etcd2.service.d/11-proxy.conf
+[Service]
+Environment="ETCD_NAME=${HOST_IDENTIFIER%%.*}"
+Environment="ETCD_DISCOVERY_SRV=${DISCOVERY_SRV}"
+Environment="ETCD_INITIAL_ADVERTISE_PEER_URLS=http://${HOST_IDENTIFIER}:2380"
+Environment="ETCD_INITIAL_CLUSTER_TOKEN=etcd-cluster-1"
+Environment="ETCD_INITIAL_CLUSTER_STATE=new"
+Environment="ETCD_ADVERTISE_CLIENT_URLS=http://${HOST_IDENTIFIER}:2379"
+Environment="ETCD_LISTEN_CLIENT_URLS=http://${HOST_IDENTIFIER}:2379"
+Environment="ETCD_LISTEN_PEER_URLS=http://${HOST_IDENTIFIER}:2380"
+Environment="ETCD_LISTEN_CLIENT_URLS=http://0.0.0.0:2379"
+EOF
+systemctl daemon-reload
+systemctl restart etcd2
+
+## MAIN cluster RE-join ##
+HOST_IDENTIFIER="etcd3.dev.example.com"
+DISCOVERY_SRV="dev.example.com"
+[[ ! -d /etc/systemd/system/etcd2.service.d ]] && mkdir -p /etc/systemd/system/etcd2.service.d
+cat << EOF >> /etc/systemd/system/etcd2.service.d/11-proxy.conf
+[Service]
+Environment="ETCD_NAME=${HOST_IDENTIFIER%%.*}"
+Environment="ETCD_DISCOVERY_SRV=${DISCOVERY_SRV}"
+Environment="ETCD_INITIAL_ADVERTISE_PEER_URLS=http://${HOST_IDENTIFIER}:2380"
+Environment="ETCD_INITIAL_CLUSTER_STATE=existing"
+Environment="ETCD_ADVERTISE_CLIENT_URLS=http://${HOST_IDENTIFIER}:2379"
+Environment="ETCD_LISTEN_CLIENT_URLS=http://${HOST_IDENTIFIER}:2379"
+Environment="ETCD_LISTEN_PEER_URLS=http://${HOST_IDENTIFIER}:2380"
+Environment="ETCD_LISTEN_CLIENT_URLS=http://0.0.0.0:2379"
+EOF
+systemctl daemon-reload
+systemctl restart etcd2
+
+## MEMBER join ##
+HOST_IDENTIFIER="10.0.0.31"
+[[ ! -d /etc/systemd/system/etcd2.service.d ]] && mkdir -p /etc/systemd/system/etcd2.service.d
+cat << EOF >> /etc/systemd/system/etcd2.service.d/11-proxy.conf
+[Service]
+Environment="ETCD_DISCOVERY_SRV=dev.example.com"
+Environment="ETCD_INITIAL_CLUSTER_STATE=existing"
+Environment="ETCD_PROXY=on"
+Environment="ETCD_ADVERTISE_CLIENT_URLS=http://${HOST_IDENTIFIER}:2379"
+Environment="ETCD_INITIAL_ADVERTISE_PEER_URLS=http://${HOST_IDENTIFIER}:2380"
+Environment="ETCD_LISTEN_CLIENT_URLS=http://0.0.0.0:2379"
+Environment="ETCD_LISTEN_PEER_URLS=http://${HOST_IDENTIFIER}:2380"
+EOF
+systemctl daemon-reload
+systemctl restart etcd2
+
+## SETUP FLEET ##
+
+ROLE="etcd"
+[[ ! -d /etc/systemd/system/fleet.service.d ]] && mkdir -p /etc/systemd/system/fleet.service.d
+cat << EOF >> /etc/systemd/system/fleet.service.d/21-metadata.conf
+[Service]
+Environment="FLEET_METADATA=role=${ROLE}"
+EOF
+systemctl daemon-reload
+systemctl restart fleet
