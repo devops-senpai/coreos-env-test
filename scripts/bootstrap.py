@@ -33,6 +33,7 @@ def getZoneId(zoneName):
 
 
 def roleRecords(zoneId, zoneName, roleIpList):
+    roleRe = re.compile(instanceRole + '[0-9]+')
     d = {}
     for aRecord in dns.list_resource_record_sets(HostedZoneId=zoneId)['ResourceRecordSets']:
         if aRecord['Type'] == 'A':
@@ -127,8 +128,6 @@ zoneName = getZone(instance)
 roleIpList = activeRoleIps(instanceRole)
 
 zoneId = getZoneId(zoneName)
-
-roleRe = re.compile(instanceRole + '[0-9]+')
 
 roleRecordsDict = roleRecords(zoneId, zoneName, roleIpList)
 
