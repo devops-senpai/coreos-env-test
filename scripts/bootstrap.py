@@ -68,11 +68,11 @@ def updateRecord(recordName, roleRecordsDict, zoneId, privateIp):
 
 def updateName(recordName):
     instance.create_tags(
-            Resources = [instanceId], 
+            Resources = [instanceId],
             Tags = [
                     {
-                        'Key': "Name", 
-                        'Value': recordName
+                        'Key': "Name",
+                        'Value': recordName.rstrip('.')
                     }
                 ])
 
