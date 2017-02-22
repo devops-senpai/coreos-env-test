@@ -11,6 +11,11 @@ def getRole(instance):
         if i['Key'] == "Role":
             return i['Value']
 
+def getZone(instance):
+    for i in instance.tags:
+        if i['Key'] == "Zone":
+            return i['Value']
+
 def activeRoleIps(instanceRole):
     roleIpList = []
     for i in ec2.instances.filter(Filters=[{'Name': 'instance-state-name', 'Values': ['running']}]):
@@ -37,6 +42,13 @@ def roleRecords(zoneId, zoneName, roleIpList):
                 if aRecord['ResourceRecords'][0]['Value'] not in roleIpList:
                     d[match.string] = None
     return d
+
+def doesRecordExist(roleRecordsDict, privateIp):
+    for k, v in roleRecordsDict.iteritems():
+        if v == privateIp:
+            return k
+        else:
+            return None
 
 def newRecordName(sortedRecords, roleRecordsDict, zoneName, instanceRole):
     if not sortedRecords:
@@ -102,8 +114,6 @@ if r.status_code == 200:
 else:
     publicIp = None
 
-zoneName = "dev.example.com."
-
 ec2 = boto3.resource('ec2', region_name=region)
 
 dns = boto3.client('route53', region_name=region)
@@ -112,6 +122,8 @@ instance = ec2.Instance(instanceId)
 
 instanceRole = getRole(instance)
 
+zoneName = getZone(instance)
+
 roleIpList = activeRoleIps(instanceRole)
 
 zoneId = getZoneId(zoneName)
@@ -119,13 +131,17 @@ zoneId = getZoneId(zoneName)
 roleRe = re.compile(instanceRole + '[0-9]+')
 
 roleRecordsDict = roleRecords(zoneId, zoneName, roleIpList)
-sortedRecords = sorted(roleRecordsDict.keys())
 
-recordName = newRecordName(sortedRecords, roleRecordsDict, zoneName, instanceRole)
-
-updateRecord(recordName, roleRecordsDict, zoneId, privateIp)
+if doesRecordExist(roleRecordsDict, privateIp):
+    recordName = doesRecordExist(roleRecordsDict, privateIp) + '.' + zoneName
+else:
+    sortedRecords = sorted(roleRecordsDict.keys())
+    recordName = newRecordName(sortedRecords, roleRecordsDict, zoneName, instanceRole)
+    updateRecord(recordName, roleRecordsDict, zoneId, privateIp)
 
 updateName(recordName)
 
 if setHostname(recordName) != 0:
     print("ERROR: unable to set hostname")
+
+
