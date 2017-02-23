@@ -1,6 +1,7 @@
 variable "environment" {
-    default = "dev"
+  default = "dev"
 }
+
 variable "region" {
-    default = "us-east-1"
+  default = "us-east-1"
 }
