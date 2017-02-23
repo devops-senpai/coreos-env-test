@@ -105,7 +105,7 @@ def updatename(recordname):
 
 def sethostname(recordname):
     """Set instance hostname."""
-    retval = call(["hostnamectl", "set-hostname", recordName.rstrip('.')])
+    retval = call(["hostnamectl", "set-hostname", recordname.rstrip('.')])
     return retval
 
 
@@ -118,7 +118,7 @@ def createrecord(action, zoneid, recordname, value):
                 {
                     'Action': action,
                     'ResourceRecordSet': {
-                        'Name': recordName,
+                        'Name': recordname,
                         'Type': 'A',
                         'TTL': 60,
                         'ResourceRecords': [
@@ -165,7 +165,7 @@ if doesrecordexist(roleRecordsDict, privateIp):
     recordName = doesrecordexist(roleRecordsDict, privateIp) + '.' + zoneName
 else:
     sortedrecords = sorted(roleRecordsDict.keys())
-    recordname = newrecordname(sortedrecords,
+    recordName = newrecordname(sortedrecords,
                                roleRecordsDict,
                                zoneName,
                                instanceRole)
