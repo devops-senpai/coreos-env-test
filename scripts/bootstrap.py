@@ -1,88 +1,117 @@
-#setup dev
-# sudo apt-get update -y && sudo apt-get install -y python-pip && sudo pip install -U pip bpython boto3
-
+"""Bootstrap instance for name and hostname and dns."""
 import requests
 import boto3
 import re
 from subprocess import call
 
-def getRole(instance):
+"""
+setup run: sudo apt-get update -y && sudo apt-get install -y python-pip && \
+sudo pip install -U pip bpython boto3.
+"""
+
+
+def getrole(instance):
+    """Return the role of the instance."""
     for i in instance.tags:
         if i['Key'] == "Role":
             return i['Value']
 
-def getZone(instance):
+
+def getzone(instance):
+    """Get zone the instance is in."""
     for i in instance.tags:
         if i['Key'] == "Zone":
             return i['Value']
 
-def activeRoleIps(instanceRole):
-    roleIpList = []
-    for i in ec2.instances.filter(Filters=[{'Name': 'instance-state-name', 'Values': ['running']}]):
+
+def activeroleips(instancerole):
+    """Get ips of other instances with same role."""
+    roleiplist = []
+    for i in ec2.instances.filter(Filters=[{'Name': 'instance-state-name',
+                                  'Values': ['running']}]):
         for d in ec2.Instance(i.id).tags:
             if d.get('Key', None) == 'Role':
                 if d['Value'] == instanceRole:
-                    roleIpList.append(ec2.Instance(i.id).private_ip_address)
-    return roleIpList
+                    roleiplist.append(ec2.Instance(i.id).private_ip_address)
+    return roleiplist
 
-def getZoneId(zoneName):
+
+def getzoneid(zonename):
+    """Get id of zone."""
     zones = dns.list_hosted_zones()
     for zone in zones['HostedZones']:
         if zone['Name'] == zoneName:
             return zone['Id'].split("/")[-1]
 
 
-def roleRecords(zoneId, zoneName, roleIpList):
-    roleRe = re.compile(instanceRole + '[0-9]+')
+def rolerecords(zoneid, zonename, roleiplist):
+    """Return records that match the role."""
+    rolere = re.compile(instanceRole + '[0-9]+')
     d = {}
-    for aRecord in dns.list_resource_record_sets(HostedZoneId=zoneId)['ResourceRecordSets']:
-        if aRecord['Type'] == 'A':
-            match = roleRe.match(aRecord['Name'][:-len(zoneName)-1])
+    for arecord in dns.list_resource_record_sets(
+            HostedZoneId=zoneId)['ResourceRecordSets']:
+        if arecord['Type'] == 'A':
+            match = rolere.match(arecord['Name'][:-len(zoneName) - 1])
             if match:
-                d.update({ match.string: aRecord['ResourceRecords'][0]['Value'] })
-                if aRecord['ResourceRecords'][0]['Value'] not in roleIpList:
+                d.update({match.string: arecord['ResourceRecords'][0]['Value']}
+                         )
+                if arecord['ResourceRecords'][0]['Value'] not in roleIpList:
                     d[match.string] = None
     return d
 
-def doesRecordExist(roleRecordsDict, privateIp):
+
+def doesrecordexist(rolerecordsdict, privateip):
+    """Check if record exists."""
     for k, v in roleRecordsDict.iteritems():
         if v == privateIp:
             return k
         else:
             return None
 
-def newRecordName(sortedRecords, roleRecordsDict, zoneName, instanceRole):
-    if not sortedRecords:
-        return instanceRole + "01" + '.' + zoneName
-    for record in sortedRecords:
-        if roleRecordsDict[record] == None:
-            recordName = record + '.' + zoneName
-            return recordName
-    newRecord = instanceRole + str(int(sortedRecords[-1].lstrip(instanceRole)) + 1).zfill(2)
-    return newRecord
 
-def updateRecord(recordName, roleRecordsDict, zoneId, privateIp):
-    if recordName.rstrip('.' + zoneName) in roleRecordsDict.keys():
-        createRecord("UPSERT", zoneId, recordName, privateIp)
+def newrecordname(sortedrecords, rolerecordsdict, zonename, instancerole):
+    """Create new record name."""
+    if not sortedrecords:
+        return instancerole + "01" + '.' + zonename
+    for record in sortedrecords:
+        if not rolerecordsdict[record]:
+            recordname = record + '.' + zonename
+            return recordname
+    newrecord = instanceRole + str(int(
+                                   sortedrecords[-1].lstrip(instanceRole)
+                                   ) + 1).zfill(2)
+    return newrecord
+
+
+def updaterecord(zonename, recordname, rolerecordsdict, zoneid, privateip):
+    """Update DNS record."""
+    if recordname.rstrip('.' + zonename) in rolerecordsdict.keys():
+        createrecord("UPSERT", zoneid, recordname, privateip)
     else:
-        createRecord("CREATE", zoneId, recordName, privateIp)
+        createrecord("CREATE", zoneid, recordname, privateip)
 
-def updateName(recordName):
+
+def updatename(recordname):
+    """Update instance name."""
     instance.create_tags(
-            Resources = [instanceId],
-            Tags = [
-                    {
-                        'Key': "Name",
-                        'Value': recordName.rstrip('.')
-                    }
-                ])
+        Resources=[instanceId],
+        Tags=[
+            {
+                'Key': "Name",
+                'Value': recordName.rstrip('.')
+            }
+        ])
 
-def setHostname(recordName):
+
+def sethostname(recordname):
+    """Set instance hostname."""
     retval = call(["hostnamectl", "set-hostname", recordName.rstrip('.')])
     return retval
 
-def createRecord(action, zoneId, recordName, value ):
-    response = dns.change_resource_record_sets(
+
+def createrecord(action, zoneid, recordname, value):
+    """Create DNS record."""
+    dns.change_resource_record_sets(
         HostedZoneId=zoneId,
         ChangeBatch={
             'Changes': [
@@ -103,7 +132,8 @@ def createRecord(action, zoneId, recordName, value ):
         }
     )
 
-r = requests.get('http://169.254.169.254/latest/meta-data/placement/availability-zone')
+r = requests.get(
+    'http://169.254.169.254/latest/meta-data/placement/availability-zone')
 region = r.text[:-1]
 r = requests.get('http://169.254.169.254/latest/meta-data/instance-id')
 instanceId = r.text
@@ -121,26 +151,27 @@ dns = boto3.client('route53', region_name=region)
 
 instance = ec2.Instance(instanceId)
 
-instanceRole = getRole(instance)
+instanceRole = getrole(instance)
 
-zoneName = getZone(instance)
+zoneName = getzone(instance)
 
-roleIpList = activeRoleIps(instanceRole)
+roleIpList = activeroleips(instanceRole)
 
-zoneId = getZoneId(zoneName)
+zoneId = getzoneid(zoneName)
 
-roleRecordsDict = roleRecords(zoneId, zoneName, roleIpList)
+roleRecordsDict = rolerecords(zoneId, zoneName, roleIpList)
 
-if doesRecordExist(roleRecordsDict, privateIp):
-    recordName = doesRecordExist(roleRecordsDict, privateIp) + '.' + zoneName
+if doesrecordexist(roleRecordsDict, privateIp):
+    recordName = doesrecordexist(roleRecordsDict, privateIp) + '.' + zoneName
 else:
-    sortedRecords = sorted(roleRecordsDict.keys())
-    recordName = newRecordName(sortedRecords, roleRecordsDict, zoneName, instanceRole)
-    updateRecord(recordName, roleRecordsDict, zoneId, privateIp)
+    sortedrecords = sorted(roleRecordsDict.keys())
+    recordname = newrecordname(sortedrecords,
+                               roleRecordsDict,
+                               zoneName,
+                               instanceRole)
+    updaterecord(zoneName, recordName, roleRecordsDict, zoneId, privateIp)
 
-updateName(recordName)
+updatename(recordName)
 
-if setHostname(recordName) != 0:
+if sethostname(recordName) != 0:
     print("ERROR: unable to set hostname")
-
-
