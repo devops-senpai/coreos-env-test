@@ -1,0 +1,14 @@
+{
+  "repos": [
+    {
+      "name": "toolbox",
+      "team": "admin",
+      "description": "the container to be used as toolbox on coreos"
+    },
+    {
+      "name": "bootstrap",
+      "team": "admin",
+      "description": "used as service to bootstrap hosts"
+    }
+  ]
+}
